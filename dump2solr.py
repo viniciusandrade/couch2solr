@@ -37,39 +37,35 @@ def create_solr_xml_update(record_list):
     return lxml.etree.tostring(add_node, xml_declaration=True, encoding='utf-8')
 
 
-def index_documents(from_doc):    
-    print "Indexing from %s" % from_doc
-    
+def dump_documents(from_doc):    
     record_list = db.list_docs(settings.DB_NAME, skip=from_doc, limit=settings.MAX_DOCS_LIMIT)
     
-    update_xml = create_solr_xml_update(record_list)
-
-    status, reason, result = solr.index_doc(update_xml)
-    if status == 200:
-        print "Indexed from %s ==> total of %i documents" % (from_doc, update_xml.count('<doc>'))
-    else:
-        print "Fail of indexing from %s, reason %s" % (from_doc, reason)
+    dump_xml = create_solr_xml_update(record_list)
     
+    xml_file_name = 'xml/solr-' + str(from_doc) + '.xml'
+
+    xml_file = open(xml_file_name, mode='w')
     
-def commit():
-    # commit changes to index 
-    status, reason, result = solr.commit()
-    if status == 200:
-        print "Commit to index OK"
-    else:
-        print "Fail of commit changes %s" % reason
+    try:
+        write_sucess = xml_file.write(dump_xml)
+        print "Dump of %s ==> total of %i documents" % (from_doc, dump_xml.count('<doc>'))
+        
+    except Exception as detail:
+        print "Write dump xml fail ", detail 
 
-
+    finally:
+        xml_file.close()
+    
 def main():    
     db_info = db.info_db(settings.DB_NAME)
     steps = (int(db_info['doc_count']) / settings.MAX_DOCS_LIMIT) + 1
     
     threads = []
     for step in range(steps):
-        from_doc = step * settings.MAX_DOCS_LIMIT
-
+        from_doc = step * settings.MAX_DOCS_LIMIT        
+        #record_list = db.list_docs(settings.DB_NAME, skip=from_doc, limit=settings.MAX_DOCS_LIMIT)
         try:
-            threads.append( Thread(target=index_documents, args=(from_doc,)).start() )
+            threads.append( Thread(target=dump_documents, args=(from_doc,)).start() )
         except:
             print "Error: unable to start thread"
 
@@ -77,8 +73,7 @@ def main():
     for t in threads:
         if t:
             t.join()
-    
-    commit()
+
 
 if __name__ == '__main__':
     main()
